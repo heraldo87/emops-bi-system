@@ -136,13 +136,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>EMOPS BI · Novo Registro – Acompanhamento</title>
+  <title>COHIDRO BI · Novo Registro – Acompanhamento</title>
   <meta name="theme-color" content="#0b1020" />
   <link rel="icon" href="/favicon.ico" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <!-- CSS Global do tema -->
-  <link rel="stylesheet" href="/assets/emops.css">
+  <link rel="stylesheet" href="/assets/cohidro.css">
   <style>
     /* específicos desta página */
     .page-wrap{max-width:980px;margin:30px auto;padding:0 18px}
@@ -223,7 +223,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </form>
     </section>
 
-    <footer class="muted" style="text-align:center;margin-top:8px">© <span id="ano"></span> EMOPS · Acompanhamento</footer>
+    <footer class="muted" style="text-align:center;margin-top:8px">© <span id="ano"></span> COHIDRO · Acompanhamento</footer>
   </main>
 
   <!-- Toast -->

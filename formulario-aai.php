@@ -1,72 +1,120 @@
-rs']['id_colaborador'] = 'ID do colaborador deve ser numérico.';
-  }
-  if (!valid_date($val['data_inicial'])) {
-    $feedback['errors']['data_inicial'] = 'Data inicial inválida (YYYY-MM-DD).';
-  }
-  if (!valid_date($val['data_final'])) {
-    $feedback['errors']['data_final'] = 'Data final inválida (YYYY-MM-DD).';
-  }
-  if ($val['data_inicial'] && $val['data_final'] && $val['data_final'] < $val['data_inicial']) {
-    $feedback['errors']['data_final'] = 'Data final não pode ser menor que a data inicial.';
-  }
-  if ($val['atividades_realizadas'] === '') {
-    $feedback['errors']['atividades_realizadas'] = 'Descreva as atividades realizadas.';
-  }
-  if ($val['atividades_previstas'] === '') {
-    $feedback['errors']['atividades_previstas'] = 'Descreva as atividades previstas.';
+<?php
+/* ==================================================================
+   formulario.php — EMOPS BI · envia AAI para n8n (Webhook)
+   Payload 1-para-1 com a tabela: nome, cpf, diretoria, data_inicial,
+   data_final, atividades_realizadas, atividades_previstas, pontos_relevantes
+   ================================================================== */
+
+require_once __DIR__ . '/auth_check.php';
+require_login(1);
+
+$PROJECT_NAME = 'COHIDRO BI';
+
+// ========= CONFIG n8n =========
+$N8N_ENDPOINT = 'https://n8n.alunosdamedicina.com/webhook/formulario_aai';
+// $N8N_ENDPOINT = 'http://localhost:5678/webhook/formulario_aai'; // teste local
+
+// ========= Sessão / CSRF =========
+session_set_cookie_params(['lifetime'=>0,'path'=>'/','httponly'=>true,'samesite'=>'Lax']);
+if (session_status() !== PHP_SESSION_ACTIVE) session_start();
+if (empty($_SESSION['csrf_form'])) { $_SESSION['csrf_form'] = bin2hex(random_bytes(32)); }
+$csrf_form = $_SESSION['csrf_form'];
+
+// ========= Dados do usuário logado =========
+$cpf_sess   = (string)($_SESSION['cpf'] ?? '');
+$nome_sess  = (string)($_SESSION['nome'] ?? '');
+$dir_sess   = (string)($_SESSION['diretoria'] ?? '');
+
+// ========= Helpers =========
+function h($s){ return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8'); }
+function only_digits($s){ return preg_replace('/\D+/', '', (string)$s); }
+
+$errors  = [];
+$ok_text = null;
+
+// Campos para repintar em caso de erro
+$nome=$cpf_raw=$diretoria=$data_inicial=$data_final=$atividades_realizadas=$atividades_previstas=$pontos_relevantes='';
+$atividade_andamento=$pontos_criticos=''; $enviar_por_email=0;
+
+// ========= POST Handler =========
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+  if (empty($_POST['csrf']) || !hash_equals($_SESSION['csrf_form'], $_POST['csrf'])) {
+    $errors[] = 'Sessão expirada. Recarregue a página e tente novamente.';
   }
 
-  // Se sem erros: insere
-  if (empty($feedback['errors'])) {
-    try {
-      date_default_timezone_set('America/Sao_Paulo');
-      $agora = (new DateTime())->format('Y-m-d H:i:s');
+  // Coleta campos (apenas os que existem na tabela)
+  $nome                 = trim($_POST['nome'] ?? $nome_sess);
+  $cpf_raw              = trim($_POST['cpf'] ?? $cpf_sess);
+  $cpf                  = only_digits($cpf_raw);
+  $diretoria            = trim($_POST['diretoria'] ?? $dir_sess);
+  $data_inicial         = trim($_POST['data_inicial'] ?? '');
+  $data_final           = trim($_POST['data_final'] ?? '');
+  $atividades_realizadas= trim($_POST['atividades_realizadas'] ?? '');
+  $atividades_previstas = trim($_POST['atividades_previstas'] ?? '');
+  $pontos_relevantes    = trim($_POST['pontos_relevantes'] ?? '');
 
-      // IMPORTANTE: assumindo que `id` é AUTO_INCREMENT — não o incluímos no INSERT
-      $sql = "INSERT INTO acompanhamento_atividades (
-                enviar_por_email, cpf, id_colaborador, data_inicial, data_final,
-                atividades_realizadas, atividades_previstas, pontos_relevantes, data_registro
-              ) VALUES (?,?,?,?,?,?,?,?,?)";
-      if (!$stmt = $conn->prepare($sql)) {
-        throw new Exception('Prepare falhou: ' . $conn->error);
+  // (Extras visuais — NÃO enviados)
+  $atividade_andamento  = trim($_POST['atividade_andamento'] ?? '');
+  $pontos_criticos      = trim($_POST['pontos_criticos'] ?? '');
+  $enviar_por_email     = !empty($_POST['enviar_por_email']) ? 1 : 0;
+
+  // Validações mínimas
+  if ($nome === '')                      $errors[] = 'Informe o nome.';
+  if ($cpf === '' || strlen($cpf) < 11)  $errors[] = 'CPF inválido.';
+  if ($diretoria === '')                 $errors[] = 'Informe a diretoria.';
+  if ($data_inicial === '')              $errors[] = 'Informe a data inicial.';
+  if ($data_final === '')                $errors[] = 'Informe a data final.';
+
+  $reData = '/^\d{4}-\d{2}-\d{2}$/';
+  if ($data_inicial && !preg_match($reData, $data_inicial)) $errors[] = 'Data inicial inválida (use AAAA-MM-DD).';
+  if ($data_final   && !preg_match($reData, $data_final))   $errors[] = 'Data final inválida (use AAAA-MM-DD).';
+
+  if (!$errors) {
+    // Payload EXATO da tabela (sem id, sem data_registro)
+    $payload = [
+      'nome'                   => $nome,
+      'cpf'                    => $cpf,
+      'diretoria'              => $diretoria,
+      'data_inicial'           => $data_inicial,
+      'data_final'             => $data_final,
+      'atividades_realizadas'  => $atividades_realizadas,
+      'atividades_previstas'   => $atividades_previstas,
+      'pontos_relevantes'      => $pontos_relevantes,
+    ];
+
+    // Envia ao n8n
+    $ch = curl_init($N8N_ENDPOINT);
+    curl_setopt_array($ch, [
+      CURLOPT_POST           => true,
+      CURLOPT_RETURNTRANSFER => true,
+      CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+      CURLOPT_POSTFIELDS     => json_encode($payload, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),
+      CURLOPT_TIMEOUT        => 20,
+    ]);
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $err      = curl_error($ch);
+    curl_close($ch);
+
+    if ($err) {
+      $errors[] = 'Falha ao comunicar com o n8n: '.h($err);
+    } elseif ($httpCode >= 400) {
+      $errors[] = 'n8n retornou HTTP '.(int)$httpCode.': '.h($response);
+    } else {
+      // Opcional: validar JSON do n8n (esperando { ok:true, insert_id:123 })
+      $ok = true;
+      $r = json_decode((string)$response, true);
+      if (is_array($r) && array_key_exists('ok', $r)) {
+        $ok = (bool)$r['ok'];
       }
-      $id_colab = (int)$val['id_colaborador'];
-      $stmt->bind_param(
-        'ssissssss',
-        $val['enviar_por_email'],
-        $val['cpf'],
-        $id_colab,
-        $val['data_inicial'],
-        $val['data_final'],
-        $val['atividades_realizadas'],
-        $val['atividades_previstas'],
-        $val['pontos_relevantes'],
-        $agora
-      );
-      if (!$stmt->execute()) {
-        throw new Exception('Execute falhou: ' . $stmt->error);
+      if ($ok) {
+        $ok_text = 'Registro inserido com sucesso. Deseja lançar outro agora?';
+        // Limpa SOMENTE campos de digitação; mantém pré-preenchidos do usuário
+        $data_inicial=$data_final=$atividades_realizadas=$atividades_previstas=$pontos_relevantes='';
+        $atividade_andamento=$pontos_criticos=''; $enviar_por_email=0;
+      } else {
+        $errors[] = 'Fluxo n8n respondeu, mas sem confirmação de sucesso.';
       }
-
-      $feedback['ok'] = true;
-      $feedback['id'] = $stmt->insert_id ?: $conn->insert_id;
-      $feedback['msg'] = 'Registro salvo com sucesso!';
-
-      // Limpa o form
-      $val = [
-        'enviar_por_email'      => '',
-        'cpf'                   => '',
-        'id_colaborador'        => '',
-        'data_inicial'          => '',
-        'data_final'            => '',
-        'atividades_realizadas' => '',
-        'atividades_previstas'  => '',
-        'pontos_relevantes'     => '',
-      ];
-      $stmt->close();
-    } catch (Throwable $e) {
-      $feedback['ok'] = false;
-      $feedback['msg'] = 'Erro ao salvar no banco.';
-      $feedback['errors']['db'] = $e->getMessage();
     }
   }
 }
@@ -74,135 +122,111 @@ rs']['id_colaborador'] = 'ID do colaborador deve ser numérico.';
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>EMOPS BI · Novo Registro – Acompanhamento</title>
-  <meta name="theme-color" content="#0b1020" />
-  <link rel="icon" href="/favicon.ico" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <!-- CSS Global do tema -->
-  <link rel="stylesheet" href="/assets/emops.css">
-  <style>
-    /* específicos desta página */
-    .page-wrap{max-width:980px;margin:30px auto;padding:0 18px}
-    .muted{opacity:.8}
-    .error{color:#fda4af;font-size:12px;margin-top:6px}
-    .form-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:12px}
-    .title-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
-  </style>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAI · <?= h($PROJECT_NAME) ?></title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b1020;--panel:#0f162e;--panel-2:#121a36;--muted:#a9b1d1;--text:#eef2ff;--r:18px;--sh:0 10px 30px rgba(0,0,0,.25)}*{box-sizing:border-box}
+body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--text)}
+.panel{width:min(860px,96vw);margin:40px auto;background:linear-gradient(180deg,var(--panel),var(--panel-2));padding:24px;border-radius:var(--r);box-shadow:var(--sh)}
+label{font-size:12px;color:var(--muted)}
+input,textarea{width:100%;margin-top:6px;padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:#0b1230;color:#eef2ff}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.btn{background:linear-gradient(135deg,rgba(79,70,229,.95),rgba(34,211,238,.95));border:none;color:#fff;padding:12px 18px;border-radius:14px;cursor:pointer}
+.btn-ghost{background:transparent;border:1px solid rgba(255,255,255,.2);color:#fff;padding:10px 16px;border-radius:12px;cursor:pointer}
+.ok{color:#22c55e;font-size:14px}
+.err{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35);padding:10px 14px;border-radius:10px;margin:10px 0}
+.small{color:#a9b1d1;font-size:12px}
+.center{display:flex;gap:12px;justify-content:center;align-items:center;margin-top:12px}
+.card{background:#0b1230;border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:16px}
+</style>
 </head>
 <body>
-  <main class="page-wrap" id="conteudo" aria-labelledby="titulo">
-    <section class="panel" style="margin-bottom:18px">
-      <div class="title-row">
-        <div>
-          <h3 id="titulo" style="margin:0">Novo Registro – Acompanhamento de Atividades</h3>
-          <div class="muted" style="font-size:13px">Insira um novo registro na tabela <code>acompanhamento_atividades</code>.</div>
-        </div>
-        <a href="/" class="btn" title="Voltar ao sistema">Voltar</a>
-      </div>
-    </section>
+  <main class="panel">
+    <h2 style="margin:0 0 12px">Acompanhamento de Atividades (AAI)</h2>
+    <p class="small">Este formulário envia ao n8n os campos da tabela <b>acompanhamento_atividades</b>.</p>
 
-    <?php if(isset($feedback['errors']['db'])): ?>
-      <section class="panel" style="border-color:rgba(239,68,68,.45)">
-        <h3>Erro de banco de dados</h3>
-        <div class="muted"><?php echo htmlspecialchars($feedback['errors']['db']); ?></div>
-      </section>
+    <?php if ($ok_text): ?>
+      <div class="card">
+        <div class="ok">✓ <?= h($ok_text) ?></div>
+        <div class="center">
+          <!-- Lançar outro: recarrega a página limpando os campos manuais -->
+          <form method="GET" action="">
+            <button class="btn" type="submit" name="novo" value="1">Lançar outro</button>
+          </form>
+          <!-- Logout: envia para logout.php (que deve encerrar sessão e redirecionar login) -->
+          <form method="POST" action="logout.php">
+            <input type="hidden" name="csrf" value="<?= h($csrf_form) ?>">
+            <button class="btn-ghost" type="submit">Sair</button>
+          </form>
+        </div>
+      </div>
+      <div style="height:8px"></div>
     <?php endif; ?>
 
-    <section class="panel" aria-labelledby="formTitle">
-      <h3 id="formTitle" style="margin:0 0 8px">Dados do registro</h3>
-      <form method="post" action="" novalidate>
-        <input type="hidden" name="csrf" value="<?php echo htmlspecialchars($csrf_token); ?>" />
-        <div class="form-grid" style="margin-top:8px">
-          <div>
-            <label>Enviar por e-mail</label>
-            <input name="enviar_por_email" type="email" placeholder="email@exemplo.com" value="<?php echo htmlspecialchars($val['enviar_por_email']); ?>" required />
-            <?php if(isset($feedback['errors']['enviar_por_email'])): ?><div class="error"><?php echo htmlspecialchars($feedback['errors']['enviar_por_email']); ?></div><?php endif; ?>
-          </div>
-          <div>
-            <label>CPF</label>
-            <input name="cpf" id="fCpf" type="text" placeholder="Somente números" value="<?php echo htmlspecialchars($val['cpf']); ?>" required />
-            <?php if(isset($feedback['errors']['cpf'])): ?><div class="error"><?php echo htmlspecialchars($feedback['errors']['cpf']); ?></div><?php endif; ?>
-          </div>
-          <div>
-            <label>ID do colaborador</label>
-            <input name="id_colaborador" type="number" min="0" step="1" placeholder="Ex.: 4" value="<?php echo htmlspecialchars($val['id_colaborador']); ?>" required />
-            <?php if(isset($feedback['errors']['id_colaborador'])): ?><div class="error"><?php echo htmlspecialchars($feedback['errors']['id_colaborador']); ?></div><?php endif; ?>
-          </div>
-          <div>
-            <label>Data inicial</label>
-            <input name="data_inicial" type="date" value="<?php echo htmlspecialchars($val['data_inicial']); ?>" required />
-            <?php if(isset($feedback['errors']['data_inicial'])): ?><div class="error"><?php echo htmlspecialchars($feedback['errors']['data_inicial']); ?></div><?php endif; ?>
-          </div>
-          <div>
-            <label>Data final</label>
-            <input name="data_final" type="date" value="<?php echo htmlspecialchars($val['data_final']); ?>" required />
-            <?php if(isset($feedback['errors']['data_final'])): ?><div class="error"><?php echo htmlspecialchars($feedback['errors']['data_final']); ?></div><?php endif; ?>
-          </div>
-          <div class="full">
-            <label>Atividades realizadas</label>
-            <textarea name="atividades_realizadas" placeholder="Descreva as atividades realizadas" required><?php echo htmlspecialchars($val['atividades_realizadas']); ?></textarea>
-            <?php if(isset($feedback['errors']['atividades_realizadas'])): ?><div class="error"><?php echo htmlspecialchars($feedback['errors']['atividades_realizadas']); ?></div><?php endif; ?>
-          </div>
-          <div class="full">
-            <label>Atividades previstas</label>
-            <textarea name="atividades_previstas" placeholder="Descreva as atividades previstas" required><?php echo htmlspecialchars($val['atividades_previstas']); ?></textarea>
-            <?php if(isset($feedback['errors']['atividades_previstas'])): ?><div class="error"><?php echo htmlspecialchars($feedback['errors']['atividades_previstas']); ?></div><?php endif; ?>
-          </div>
-          <div class="full">
-            <label>Pontos relevantes</label>
-            <textarea name="pontos_relevantes" placeholder="Observações e pontos relevantes"><?php echo htmlspecialchars($val['pontos_relevantes']); ?></textarea>
-          </div>
-        </div>
-        <div class="form-actions">
-          <button type="reset" class="btn">Limpar</button>
-          <button type="submit" class="btn brand">Salvar</button>
-        </div>
-      </form>
-    </section>
+    <?php if (!empty($errors)): ?>
+      <div class="err">
+        <b>Foram encontrados erros:</b>
+        <ul style="margin:8px 0 0 16px">
+          <?php foreach($errors as $e) echo '<li>'.h($e).'</li>'; ?>
+        </ul>
+      </div>
+    <?php endif; ?>
 
-    <footer class="muted" style="text-align:center;margin-top:8px">© <span id="ano"></span> EMOPS · Acompanhamento</footer>
+    <!-- Se houve sucesso ($ok_text), ocultamos o formulário até o usuário decidir -->
+    <form method="POST" action="" <?= $ok_text ? 'style="display:none"' : '' ?>>
+      <input type="hidden" name="csrf" value="<?= h($csrf_form) ?>">
+
+      <div class="grid2">
+        <div><label>Nome</label><input type="text" name="nome" value="<?= h($nome_sess) ?>" readonly></div>
+        <div><label>CPF</label><input type="text" name="cpf" value="<?= h($cpf_sess) ?>" readonly></div>
+      </div>
+
+      <div class="grid2" style="margin-top:12px">
+        <div><label>Diretoria</label><input type="text" name="diretoria" value="<?= h($dir_sess) ?>" readonly></div>
+        <div></div>
+      </div>
+
+      <div class="grid2" style="margin-top:12px">
+        <div><label>Data Inicial</label><input id="data_inicial" type="date" name="data_inicial" value="<?= h($data_inicial ?? '') ?>" required></div>
+        <div><label>Data Final</label><input id="data_final" type="date" name="data_final" value="<?= h($data_final ?? '') ?>" required></div>
+      </div>
+
+      <div style="margin-top:12px"><label>Atividades Realizadas</label>
+        <textarea name="atividades_realizadas"><?= h($atividades_realizadas ?? '') ?></textarea></div>
+
+      <div style="margin-top:12px"><label>Atividades Previstas</label>
+        <textarea name="atividades_previstas"><?= h($atividades_previstas ?? '') ?></textarea></div>
+
+      <div style="margin-top:12px"><label>Pontos Relevantes</label>
+        <textarea name="pontos_relevantes"><?= h($pontos_relevantes ?? '') ?></textarea></div>
+
+      <!-- Extras visuais (NÃO enviados no payload) -->
+      <div style="margin-top:12px"><label>Atividade em Andamento (opcional)</label>
+        <textarea name="atividade_andamento"><?= h($atividade_andamento ?? '') ?></textarea></div>
+      <div style="margin-top:12px"><label>Pontos Críticos (opcional)</label>
+        <textarea name="pontos_criticos"><?= h($pontos_criticos ?? '') ?></textarea></div>
+
+      <div style="display:flex;justify-content:flex-end;align-items:center;margin-top:14px;gap:10px">
+        <!-- Se quiser manter o e-mail, deixe; caso contrário, remova o bloco abaixo -->
+        <!-- <label class="small"><input type="checkbox" name="enviar_por_email" value="1" <?= !empty($enviar_por_email) ? 'checked' : '' ?>> Enviar cópia por e-mail</label> -->
+        <button class="btn" type="submit">Enviar</button>
+      </div>
+    </form>
   </main>
 
-  <!-- Toast -->
-  <div id="toast" style="position:fixed; right:20px; bottom:20px; background:#0b1230; border:1px solid rgba(255,255,255,.12); color:var(--text); padding:12px 14px; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.25); display:none"></div>
-
-  <script>
-    const $ = (q,ctx=document)=>ctx.querySelector(q);
-    const showToast = (msg)=>{ const t=$('#toast'); t.textContent=msg; t.style.display='block'; setTimeout(()=>t.style.display='none', 2400); };
-    window.addEventListener('DOMContentLoaded', ()=>{
-      document.getElementById('ano').textContent = new Date().getFullYear();
-      const cpf = document.getElementById('fCpf');
-      if(cpf){ cpf.addEventListener('input', e=>{ e.target.value = e.target.value.replace(/\D+/g,'').slice(0,14); }); }
-      const feedback = <?php echo json_encode($feedback, JSON_UNESCAPED_UNICODE); ?>;
-      if (feedback && feedback.msg) {
-        showToast(feedback.msg + (feedback.id ? ` (ID: ${feedback.id})` : ''));
-      }
-    });
-  </script>
+<script>
+const i=document.getElementById('data_inicial'),f=document.getElementById('data_final');
+const hoje=new Date().toISOString().split('T')[0];
+if(i&&f){
+  i.max=f.max=hoje;
+  i.addEventListener('change',()=>{if(i.value>hoje){alert('A data inicial não pode ser no futuro!');i.value='';return}
+    if(f.value&&i.value>f.value){alert('A data inicial não pode ser maior que a data final!');i.value='';return}
+    f.min=i.value});
+  f.addEventListener('change',()=>{if(f.value>hoje){alert('A data final não pode ser no futuro!');f.value='';return}
+    if(i.value&&f.value<i.value){alert('A data final não pode ser menor que a data inicial!');f.value='';return}
+    i.max=f.value});
+}
+</script>
 </body>
 </html>
-
-<?php /*a
-SQL de referência (MySQL):
-
-CREATE TABLE IF NOT EXISTS acompanhamento_atividades (
-  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  enviar_por_email VARCHAR(255) NOT NULL,
-  cpf VARCHAR(14) NOT NULL,
-  id_colaborador BIGINT UNSIGNED NOT NULL,
-  data_inicial DATE NOT NULL,
-  data_final DATE NOT NULL,
-  atividades_realizadas TEXT NOT NULL,
-  atividades_previstas TEXT NOT NULL,
-  pontos_relevantes TEXT NULL,
-  data_registro DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (id),
-  KEY idx_colab (id_colaborador),
-  KEY idx_periodo (data_inicial, data_final)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-Observação: este arquivo assume que conn.php define $conn como instância de mysqli e já define set_charset('utf8mb4').
-*/ ?>

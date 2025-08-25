@@ -1,29 +1,154 @@
 <?php
-// Arquivo: partials/sidebar.php
+if (!function_exists('activeClass')) {
+  function activeClass($id, $current) {
+    return (!empty($current) && $current === $id) ? ' active' : '';
+  }
+}
 ?>
 <aside id="sidebar" class="sidebar" aria-label="Menu lateral">
-  <div class="brand" aria-label="Identidade do sistema">
+  <style>
+    /* Identidade */
+    #sidebar .brand { display:flex; align-items:center; gap:10px; margin:8px 6px 6px; }
+    #sidebar .brand strong { font-size:14px; }
+    #sidebar .brand small { font-size:11px; opacity:.7; display:block; }
+
+    /* Linha divisória */
+    #sidebar .sep{
+      height:1px; margin:10px 6px; background:linear-gradient(90deg, transparent, rgba(255,255,255,.12), transparent);
+    }
+
+    /* Cabeçalho COHIDRO BI */
+    #sidebar .title-wrap{ text-align:center; margin: 14px 6px 12px; }
+    #sidebar .title{ font-size:18px; font-weight:800; }
+    #sidebar .subtitle{ font-size:10px; text-transform:uppercase; opacity:.75; letter-spacing:.08em; }
+
+    /* Cards menores */
+    #sidebar .group-card{
+      margin:6px 0 8px; padding:4px; border-radius:12px;
+      background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.01));
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+    }
+    #sidebar .group-head{
+      display:flex; align-items:center; gap:6px; padding:5px 8px;
+      border-radius:8px; cursor:pointer; user-select:none; position:relative;
+    }
+    #sidebar .group-head .label-link{ flex:1; text-decoration:none; color:inherit; font-weight:600; font-size:13px; }
+    #sidebar .group-head .caret{ transition: transform .18s ease; opacity:.85; font-size:10px; }
+    #sidebar .group-head[aria-expanded="true"] .caret{ transform: rotate(180deg); }
+
+    /* Chip centralizado */
+    #sidebar .chip{
+      font-size:10px; font-weight:700;
+      min-width:18px; height:18px; display:flex; align-items:center; justify-content:center;
+      border-radius:50%; background: rgba(99,102,241,.2);
+      box-shadow: inset 0 0 0 1px rgba(99,102,241,.35);
+    }
+
+    /* Submenus menores */
+    #sidebar .nav-sub{ margin:4px 4px 6px 10px; padding-left:8px; border-left:2px solid rgba(255,255,255,.08);
+      overflow:hidden; max-height:0; transition:max-height .22s ease; }
+    #sidebar .nav-sub.open{ max-height:240px; }
+    #sidebar .nav-item{ display:flex; padding:5px 9px; border-radius:8px; font-size:12.5px; text-decoration:none; }
+    #sidebar .nav-item:hover{ background: rgba(255,255,255,.05); }
+    #sidebar .nav-item.active{
+      background: rgba(99,102,241,.18);
+      box-shadow: inset 0 0 0 1px rgba(99,102,241,.35);
+    }
+
+    /* Links externos - SEM setinha */
+    #sidebar .external-link{ 
+      display:flex; padding:5px 9px; border-radius:8px; font-size:12.5px; 
+      text-decoration:none; color:inherit;
+    }
+    #sidebar .external-link:hover{ background: rgba(255,255,255,.05); }
+    #sidebar .external-link.active{
+      background: rgba(99,102,241,.18);
+      box-shadow: inset 0 0 0 1px rgba(99,102,241,.35);
+    }
+  </style>
+
+  <!-- Identidade -->
+  <div class="brand">
     <div class="brand-logo" aria-hidden="true">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"/><path d="M2 12h20"/></svg>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"/><path d="M2 12h20"/></svg>
     </div>
     <div>
       <strong>CORTEX360</strong>
-      <div style="font-size:12px; opacity:.7">Controle de Obras · Dashboard</div>
+      <small>Controle de Obras</small>
     </div>
   </div>
-  <div class="side-search">
-    <input type="search" placeholder="Pesquisar..." aria-label="Pesquisar no sistema">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+
+  <div class="sep"></div>
+
+  <!-- Título BI -->
+  <div class="title-wrap">
+    <div class="title">COHIDRO BI</div>
+    <div class="subtitle">Business Intelligence</div>
   </div>
-  <nav class="nav">
-    <a class="active" href="#" data-goto="dashboard"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="15" width="7" height="6"/></svg> Dashboard</a>
-    <a href="#" data-goto="obras"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M9 8l-6 13"/><path d="M15 8l6 13"/><path d="M6 16h12"/></svg> Obras</a>
-    <a href="#" data-goto="contratos"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16l4-2 4 2 4-2 4 2V8z"/></svg> Contratos</a>
-    <a href="#" data-goto="colaboradores"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-3-3.87"/><path d="M4 21v-2a4 4 0 0 1 3-3.87"/><circle cx="12" cy="7" r="4"/></svg> Colaboradores</a>
-    <a href="#" data-goto="aprovacoes"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Aprovações</a>
-    <a href="#" data-goto="uploads"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Uploads</a>
-    <a href="#" data-goto="relatorios"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h18v18H3z"/><path d="M3 9h18"/><path d="M9 21V9"/></svg> Relatórios</a>
-    <small>Administração</small>
-    <a href="#" data-goto="config"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06A2 2 0 1 1 7.04 3.7l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c0 .66.26 1.3.73 1.77.47.47 1.11.73 1.77.73H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Configurações</a>
+
+  <div class="sep"></div>
+
+  <nav class="nav" aria-label="COHIDRO BI Menu">
+    <!-- Dashboard -->
+    <div class="group-card" data-group="dashboard">
+      <div class="group-head" role="button" tabindex="0" aria-expanded="false" aria-controls="sub-dashboard">
+        <a href="#" data-goto="dashboard" class="label-link<?php echo activeClass('dashboard', $CURRENT_SECTION ?? null); ?>">Dashboard</a>
+        <span class="chip">2</span>
+        <span class="caret">▼</span>
+      </div>
+      <div class="nav-sub" id="sub-dashboard">
+        <a href="#" data-goto="aai" class="nav-item<?php echo activeClass('aai', $CURRENT_SECTION ?? null); ?>">AAI</a>
+        <a href="#" data-goto="obras" class="nav-item<?php echo activeClass('obras', $CURRENT_SECTION ?? null); ?>">Obras</a>
+      </div>
+    </div>
+
+    <!-- Atividades -->
+    <div class="group-card" data-group="atividades">
+      <div class="group-head" role="button" tabindex="0" aria-expanded="false" aria-controls="sub-atividades">
+        <a href="#" data-goto="atividades" class="label-link<?php echo activeClass('atividades', $CURRENT_SECTION ?? null); ?>">Atividades</a>
+        <span class="chip">3</span>
+        <span class="caret">▼</span>
+      </div>
+      <div class="nav-sub" id="sub-atividades">
+        <a href="#" data-goto="colaboradores" class="nav-item<?php echo activeClass('colaboradores', $CURRENT_SECTION ?? null); ?>">Colaboradores</a>
+        <a href="formulario.php" class="external-link<?php echo activeClass('formulario', $CURRENT_SECTION ?? null); ?>">Formulário</a>
+        <a href="#" data-goto="rel_atividades" class="nav-item<?php echo activeClass('rel_atividades', $CURRENT_SECTION ?? null); ?>">Rel. Atividades</a>
+      </div>
+    </div>
   </nav>
+
+  <script>
+  (function(){
+    const KEY = 'cohidro_sidebar_open';
+    let state = {};
+    try { state = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch(e){}
+    function setOpen(groupEl, open){
+      const head = groupEl.querySelector('.group-head');
+      const sub = groupEl.querySelector('.nav-sub');
+      head.setAttribute('aria-expanded', String(open));
+      sub.classList.toggle('open', open);
+      state[groupEl.dataset.group] = open;
+      localStorage.setItem(KEY, JSON.stringify(state));
+    }
+    document.querySelectorAll('#sidebar .group-card').forEach(group=>{
+      const open = state[group.dataset.group] || false; // fechado por padrão
+      setOpen(group, open);
+      const head = group.querySelector('.group-head');
+      
+      head.addEventListener('click', (e) => {
+        // Só abre/fecha se não clicou em um link
+        if (!e.target.classList.contains('label-link') || e.target.style.cursor === 'default') {
+          setOpen(group, head.getAttribute('aria-expanded')!=='true');
+        }
+      });
+      
+      head.addEventListener('keydown', e=>{
+        if(e.key==='Enter'||e.key===' '){ e.preventDefault(); setOpen(group, head.getAttribute('aria-expanded')!=='true'); }
+      });
+    });
+
+    // Log para debug
+    console.log('Sidebar carregado. Links externos:', document.querySelectorAll('.external-link').length);
+  })();
+  </script>
 </aside>

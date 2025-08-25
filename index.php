@@ -7,15 +7,15 @@ require_once __DIR__.'/auth_check.php';
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>EMOPS BI · Dashboard</title>
-  <meta name="description" content="Painel EMOPS BI: KPIs, gráficos, tabela de obras e formulários." />
+  <title>COHIDRO BI · Dashboard</title>
+  <meta name="description" content="Painel COHIDRO BI: KPIs, gráficos, tabela de obras e formulários." />
   <meta name="theme-color" content="#0b1020" />
   <link rel="icon" href="/favicon.ico" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 
   <!-- CSS externo -->
-  <link rel="stylesheet" href="/assets/emops.css" />
+  <link rel="stylesheet" href="/assets/cohidro.css" />
 
   <!-- Chart.js (pinned) -->
   <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js" crossorigin="anonymous"></script>
@@ -87,18 +87,24 @@ require_once __DIR__.'/auth_check.php';
         <section class="panel"><h3>Andamento Físico · Linha do Tempo</h3><canvas id="chartTimeline" height="120"></canvas></section>
 
         <section class="panel">
-          <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:10px">
-            <h3 style="margin:0">Lista de Obras</h3>
-            <div style="display:flex; gap:8px; align-items:center">
-              <input id="tblBusca" class="input" type="search" placeholder="Filtrar tabela..." style="width:220px">
-              <select id="tblLinhas" class="input" style="width:120px">
-                <option value="10">10 / pág</option>
-                <option value="25">25 / pág</option>
-                <option value="50" selected>50 / pág</option>
-                <option value="100">100 / pág</option>
-              </select>
-            </div>
-          </div>
+<div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:10px">
+  <h3 style="margin:0">Lista de Obras</h3>
+
+  <div style="display:flex; gap:8px; align-items:center">
+    <!-- Campo de busca -->
+    <input id="tblBusca" class="input" type="search" placeholder="Filtrar tabela..."
+      style="width:220px; padding:6px 10px; border:1px solid #444; border-radius:6px; background:#222; color:#fff;">
+
+    <!-- Lista suspensa -->
+    <select id="tblLinhas" class="input"
+      style="width:140px; padding:6px 10px; border:1px solid #444; border-radius:6px; background:#222; color:#fff; cursor:pointer;">
+      <option value="10">10 por página</option>
+      <option value="25">25 por página</option>
+      <option value="50" selected>50 por página</option>
+      <option value="100">100 por página</option>
+    </select>
+  </div>
+</div>
           <div class="table-wrap">
             <table id="tObras" aria-label="Tabela de obras">
               <thead><tr><th>Órgão</th><th>Município</th><th>Diretoria</th><th>Empresa</th><th>Nº Contrato</th><th>Valor (R$)</th><th>Andamento</th><th>Prazo (dias)</th><th>Término Prev.</th><th>Status</th></tr></thead>
@@ -108,7 +114,7 @@ require_once __DIR__.'/auth_check.php';
           <div id="paginacao" style="display:flex; justify-content:flex-end; gap:6px; margin-top:10px"></div>
         </section>
 
-        <footer>© <span id="ano"></span> EMOPS · Template inicial. Conecte aos seus endpoints em <code>/api/...</code> ou n8n.</footer>
+        <footer>© <span id="ano"></span> COHIDRO · Template inicial. Conecte aos seus endpoints em <code>/api/...</code> ou n8n.</footer>
       </main>
     </div>
   </div>
@@ -141,10 +147,8 @@ require_once __DIR__.'/auth_check.php';
           <div><label>Período</label><input id="aaiPeriodo" type="text" placeholder="Ex.: 01–15/08/2025" /></div>
           <div><label>Data</label><input id="aaiData" type="date" /></div>
           <div class="full"><label>Atividades Realizadas</label><textarea id="aaiRealizadas" placeholder="Descreva..."></textarea></div>
-          <div class="full"><label>Atividades em Andamento</label><textarea id="aaiEmAndamento" placeholder="Descreva..."></textarea></div>
           <div class="full"><label>Atividades Previstas</label><textarea id="aaiPrevistas" placeholder="Descreva..."></textarea></div>
           <div class="full"><label>Pontos Relevantes</label><textarea id="aaiRelevantes" placeholder="Descreva..."></textarea></div>
-          <div class="full"><label>Pontos Críticos</label><textarea id="aaiCriticos" placeholder="Descreva..."></textarea></div>
         </div>
       </section>
       <footer><button class="btn" data-close="#mAAI">Cancelar</button><button class="btn brand" id="salvarAAI">Salvar</button></footer>
@@ -166,10 +170,10 @@ require_once __DIR__.'/auth_check.php';
     const btnMenu = $('#btnMenu');
     if(btnMenu){ btnMenu.addEventListener('click', ()=> sidebar.classList.toggle('open')); }
 
-    // Navegação lateral
-    $$('.nav a').forEach(a=>a.addEventListener('click',e=>{
+    // Navegação lateral - CORRIGIDA: só intercepta links sem classe external-link
+    $$('.nav a:not(.external-link)').forEach(a=>a.addEventListener('click',e=>{
       e.preventDefault();
-      $$('.nav a').forEach(x=>x.classList.remove('active'));
+      $$('.nav a:not(.external-link)').forEach(x=>x.classList.remove('active'));
       a.classList.add('active');
       document.getElementById('conteudo').scrollIntoView({behavior:'smooth'});
     }));

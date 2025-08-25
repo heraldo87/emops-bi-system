@@ -3,7 +3,7 @@
 require_once __DIR__ . '/auth_check.php';
 require_once __DIR__ . '/conn.php';
 
-$PROJECT_NAME = 'EMOPS BI';
+$PROJECT_NAME = 'COHIDRO BI';
 
 // CSRF
 if (empty($_SESSION['csrf_aai'])) {
